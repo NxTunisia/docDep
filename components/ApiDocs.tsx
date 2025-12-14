@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Key, Code, Terminal, Globe, AlertTriangle } from 'lucide-react';
 import { API_KEY } from '../constants';
 
@@ -8,6 +8,14 @@ interface ApiDocsProps {
 
 const ApiDocs: React.FC<ApiDocsProps> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState<'local' | 'remote'>('local');
+  const [apiUrl, setApiUrl] = useState('https://your-project.vercel.app/api/fill');
+
+  useEffect(() => {
+    // Dynamically set the URL based on where the app is running
+    if (typeof window !== 'undefined') {
+      setApiUrl(`${window.location.origin}/api/fill`);
+    }
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -79,7 +87,7 @@ const ApiDocs: React.FC<ApiDocsProps> = ({ onBack }) => {
                   <pre className="text-sm font-mono text-green-400">
 {`{
   "api_key": "${API_KEY}",
-  "docID": 12345,  // The ID of the template in your dashboard
+  "docID": "12345",  // The ID of the template in your dashboard
   "fields": {
     "name": "John Doe",
     "date": "2024-01-01"
@@ -100,12 +108,12 @@ const ApiDocs: React.FC<ApiDocsProps> = ({ onBack }) => {
                    Use this endpoint to generate documents programmatically from any server or tool (Postman, Node.js, Python).
                  </p>
                  
-                 <div className="bg-slate-100 p-3 rounded-lg border border-slate-300 font-mono text-sm mb-4 inline-block">
-                   POST /api/fill
+                 <div className="bg-slate-100 p-3 rounded-lg border border-slate-300 font-mono text-sm mb-4 inline-block break-all">
+                   POST {apiUrl}
                  </div>
                  
                  <p className="text-sm text-slate-500 italic">
-                   * If deployed to Vercel, the full URL is <code>https://your-project.vercel.app/api/fill</code>
+                   * This is the URL you should use in your mobile app.
                  </p>
                </div>
 
@@ -114,17 +122,21 @@ const ApiDocs: React.FC<ApiDocsProps> = ({ onBack }) => {
                  <ul className="list-disc pl-5 space-y-2 text-slate-600 text-sm">
                    <li>Method: <strong>POST</strong></li>
                    <li>Header: <code>Content-Type: application/json</code></li>
-                   <li>Because the server cannot see your browser storage, you <strong>must send the template file</strong> in the request body as a Base64 string.</li>
+                   <li>
+                     <strong>Option A (Recommended):</strong> Send <code>docID</code> to use a template stored in Supabase.
+                     <br/>
+                     <strong>Option B:</strong> Send <code>template</code> (Base64 string) to provide the file directly.
+                   </li>
                  </ul>
                </div>
 
                <div>
-                <h4 className="font-semibold text-slate-900 mb-3">Request Body</h4>
+                <h4 className="font-semibold text-slate-900 mb-3">Request Body (Using Saved Template)</h4>
                 <div className="bg-slate-900 rounded-xl p-6 overflow-x-auto">
                   <pre className="text-sm font-mono text-green-400">
 {`{
   "api_key": "${API_KEY}",
-  "template": "UEsDBBQABgAIAAAAIQA...", // Base64 encoded DOCX file string
+  "docID": "12345", // Get this ID from your dashboard
   "data": {
     "name": "Jane Doe",
     "invoice_id": "999"
