@@ -1,10 +1,13 @@
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
+import { createClient } from '@supabase/supabase-js';
 
-// Hardcoded API Key as requested
-const API_KEY = "TEST";
+// Use environment variable if available, otherwise default to "TEST"
+const API_KEY = process.env.API_KEY || "TEST";
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY; // Using Anon Key is enough if bucket is public/authenticated, ideally use Service Role Key for backend
 
-export default function handler(request, response) {
+export default async function handler(request, response) {
   // Enable CORS
   response.setHeader('Access-Control-Allow-Credentials', true);
   response.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,26 +27,66 @@ export default function handler(request, response) {
   }
 
   try {
-    const { api_key, template, data } = request.body;
+    const { api_key, template, docID, data } = request.body;
 
     // 1. Validate API Key
     if (api_key !== API_KEY) {
       return response.status(401).json({ error: 'Unauthorized: Invalid API Key' });
     }
 
-    // 2. Validate Payload
-    if (!template || !data) {
+    // 2. Resolve Template Content
+    let contentBuffer = null;
+
+    if (template) {
+      // Case A: Base64 template provided directly (Stateless)
+      contentBuffer = Buffer.from(template, 'base64');
+    } else if (docID) {
+      // Case B: Fetch from Supabase using docID (Stateful/Cloud)
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        return response.status(503).json({ error: 'Server misconfiguration: Supabase keys missing.' });
+      }
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+      
+      // We need to find the full filename. Since we don't have a DB, we search the bucket list
+      // This is inefficient but works for a "storage only" solution.
+      const { data: files, error: listError } = await supabase.storage.from('templates').list();
+      
+      if (listError || !files) {
+         throw new Error("Could not access template storage.");
+      }
+
+      // Find file starting with ID___ and ending with .docx
+      const targetFile = files.find(f => f.name.startsWith(docID + '___') && f.name.endsWith('.docx'));
+
+      if (!targetFile) {
+        return response.status(404).json({ error: `Template with ID ${docID} not found.` });
+      }
+
+      const { data: fileBlob, error: downError } = await supabase.storage
+        .from('templates')
+        .download(targetFile.name);
+
+      if (downError || !fileBlob) {
+        throw new Error("Failed to download template file.");
+      }
+
+      const arrayBuffer = await fileBlob.arrayBuffer();
+      contentBuffer = Buffer.from(arrayBuffer);
+
+    } else {
       return response.status(400).json({ 
         error: 'Missing parameters', 
-        message: 'Please provide "template" (base64 string) and "data" (json object).' 
+        message: 'Please provide either "template" (base64) OR "docID" (saved ID), and "data".' 
       });
     }
 
+    if (!data) {
+       return response.status(400).json({ error: 'Missing "data" object.' });
+    }
+
     // 3. Process Document
-    // Convert base64 string back to binary buffer
-    const content = Buffer.from(template, 'base64');
-    
-    const zip = new PizZip(content);
+    const zip = new PizZip(contentBuffer);
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
