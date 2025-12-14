@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { FileUp, FileText, Trash2, Code, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { FileUp, FileText, Trash2, Code, Calendar, CheckCircle, AlertCircle, RefreshCw, Cloud } from 'lucide-react';
 import { TemplateFile } from '../types';
 import { extractPlaceholders } from '../utils/docxUtils';
 import { saveTemplateToStorage, getTemplatesFromStorage, deleteTemplateFromStorage } from '../utils/storageUtils';
+import { supabase } from '../utils/supabaseClient';
 import { API_KEY } from '../constants';
 
 interface TemplateManagerProps {
@@ -12,22 +13,34 @@ interface TemplateManagerProps {
 const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) => {
   const [savedTemplates, setSavedTemplates] = useState<TemplateFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewApiId, setViewApiId] = useState<string | null>(null); // ID of template to show API modal for
+  const [viewApiId, setViewApiId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadTemplates();
   }, []);
 
-  const loadTemplates = () => {
-    setSavedTemplates(getTemplatesFromStorage());
+  const loadTemplates = async () => {
+    setIsLoading(true);
+    try {
+      const templates = await getTemplatesFromStorage();
+      setSavedTemplates(templates);
+    } catch (e) {
+      console.error(e);
+      setError("Failed to load templates.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const processFile = async (file: File) => {
     setError(null);
+    setIsLoading(true);
     if (!file.name.endsWith('.docx')) {
       setError('Please upload a .docx file');
+      setIsLoading(false);
       return;
     }
 
@@ -37,10 +50,11 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) =
       
       if (placeholders.length === 0) {
         setError('No placeholders detected. Ensure format is {placeholderName}.');
+        setIsLoading(false);
         return;
       }
 
-      // Generate a simple numeric ID for easier API simulation usage, or use timestamp
+      // Generate a simple numeric ID 
       const simpleId = Math.floor(Math.random() * 100000).toString();
 
       const template: TemplateFile = {
@@ -51,23 +65,27 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) =
         uploadDate: new Date(),
       };
 
-      const saved = saveTemplateToStorage(template);
-      if (!saved) {
-        setError('Template processed but could not be saved (Storage Full). You can still use it once.');
+      const success = await saveTemplateToStorage(template);
+      if (!success) {
+        setError('Template processed but could not be saved. Check connection or storage quota.');
       } else {
-        loadTemplates(); // Refresh list
+        await loadTemplates(); // Refresh list
       }
     } catch (err) {
       console.error(err);
       setError('Failed to parse file.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (confirm('Are you sure you want to delete this template?')) {
-      deleteTemplateFromStorage(id);
-      loadTemplates();
+      setIsLoading(true);
+      await deleteTemplateFromStorage(id);
+      await loadTemplates();
+      setIsLoading(false);
     }
   };
 
@@ -104,7 +122,17 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) =
     <div className="max-w-6xl mx-auto p-6">
       <div className="mb-8 text-center">
         <h2 className="text-3xl font-bold text-slate-800">Template Library</h2>
-        <p className="text-slate-500 mt-2">Manage your DOCX templates and IDs</p>
+        <p className="text-slate-500 mt-2 flex items-center justify-center gap-2">
+          {supabase ? (
+            <span className="flex items-center text-green-600 text-sm font-medium bg-green-50 px-2 py-1 rounded-full border border-green-200">
+              <Cloud className="h-3 w-3 mr-1" /> Cloud Sync Active (Supabase)
+            </span>
+          ) : (
+             <span className="flex items-center text-amber-600 text-sm font-medium bg-amber-50 px-2 py-1 rounded-full border border-amber-200">
+              <AlertCircle className="h-3 w-3 mr-1" /> Local Storage Mode
+            </span>
+          )}
+        </p>
       </div>
 
       {/* Upload Section */}
@@ -114,13 +142,14 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) =
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => !isLoading && fileInputRef.current?.click()}
           className={`
             relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
             ${isDragging 
               ? 'border-indigo-500 bg-indigo-50' 
               : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'
             }
+            ${isLoading ? 'opacity-50 cursor-wait' : ''}
           `}
         >
           <input
@@ -129,14 +158,21 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) =
             className="hidden"
             accept=".docx"
             onChange={handleFileInput}
+            disabled={isLoading}
           />
           
           <div className="flex flex-col items-center pointer-events-none">
-            <div className="h-12 w-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-3">
-              <FileUp className="h-6 w-6" />
-            </div>
+            {isLoading ? (
+               <div className="h-12 w-12 flex items-center justify-center mb-3">
+                 <RefreshCw className="h-8 w-8 text-indigo-600 animate-spin" />
+               </div>
+            ) : (
+              <div className="h-12 w-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-3">
+                <FileUp className="h-6 w-6" />
+              </div>
+            )}
             <p className="text-slate-700 font-medium">
-              Click to upload or drag and drop
+              {isLoading ? "Processing..." : "Click to upload or drag and drop"}
             </p>
             <p className="text-slate-500 text-sm mt-1">
               Supports .docx files with {'{placeholders}'}
@@ -158,11 +194,19 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) =
           <span className="ml-2 bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">
             {savedTemplates.length}
           </span>
+          {isLoading && <RefreshCw className="h-4 w-4 ml-2 animate-spin text-indigo-500" />}
         </h3>
 
         {savedTemplates.length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-            <p className="text-slate-400">No templates saved yet. Upload one above!</p>
+            <p className="text-slate-400">
+              {isLoading ? "Loading templates..." : "No templates saved yet. Upload one above!"}
+            </p>
+            {!supabase && (
+               <p className="text-xs text-amber-500 mt-2">
+                 Configure Supabase in .env to enable cloud sync across devices.
+               </p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -245,20 +289,18 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ onTemplateSelect }) =
             </div>
             <div className="p-6">
               <p className="text-sm text-slate-600 mb-3">
-                Use the following JSON structure to reference this document ID in your requests:
+                Use this ID to generate documents from your mobile app.
+                {supabase ? "" : " (Requires Cloud Config)"}
               </p>
               <div className="bg-slate-900 rounded-lg p-4 overflow-x-auto relative group">
                 <pre className="text-xs text-green-400 font-mono">
 {JSON.stringify({
   api_key: API_KEY,
-  docID: parseInt(viewApiId),
-  fields: savedTemplates.find(t => t.id === viewApiId)?.placeholders.reduce((acc, curr) => ({...acc, [curr]: "value"}), {}) || {}
+  docID: viewApiId,
+  data: savedTemplates.find(t => t.id === viewApiId)?.placeholders.reduce((acc, curr) => ({...acc, [curr]: "value"}), {}) || {}
 }, null, 2)}
                 </pre>
               </div>
-              <p className="text-xs text-slate-400 mt-4">
-                Note: Copy this to use in the "Simulate API" section within the editor.
-              </p>
             </div>
             <div className="px-6 py-3 border-t border-slate-200 flex justify-end">
               <button 
