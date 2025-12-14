@@ -16,7 +16,8 @@
     "docxtemplater": "^3.45.0",
     "file-saver": "^2.0.5",
     "docx-preview": "^0.3.2",
-    "html2pdf.js": "^0.10.1"
+    "html2pdf.js": "^0.10.1",
+    "@supabase/supabase-js": "^2.39.7"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
