@@ -1,0 +1,5 @@
+{
+  "name": "Copy of SmartDoc Filler",
+  "description": "A template management tool that automatically detects placeholders in DOCX files and uses AI to assist in filling them.",
+  "requestFramePermissions": []
+}

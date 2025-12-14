@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartDoc Filler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      /* 
+         The print container needs to be visible to the DOM for html2pdf/html2canvas to work,
+         but we hide it from the user by positioning it far off-screen.
+      */
+      #print-container {
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        width: 210mm; /* A4 width */
+        background: white;
+        z-index: -1;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "pizzip": "https://esm.sh/pizzip@^3.2.0",
+    "docxtemplater": "https://esm.sh/docxtemplater@^3.67.6",
+    "file-saver": "https://esm.sh/file-saver@^2.0.5",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "html2pdf.js": "https://esm.sh/html2pdf.js@^0.12.1",
+    "docx-preview": "https://esm.sh/docx-preview@^0.3.7"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-slate-50 text-slate-900 antialiased">
+    <div id="root"></div>
+    <div id="print-container"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
